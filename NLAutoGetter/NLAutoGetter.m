@@ -49,8 +49,24 @@ static NLAutoGetter *sharedPlugin;
   NSString *implementionFilePath = nil;
   if ([fileExtension isEqualToString:@"m"]
       || [fileExtension isEqualToString:@"mm"]) {
-
+    /**
+     *  @brief  当前在m文件中。目前是直接把getter方法写到文件中，不应该这么做，而应该是直接复制到当前文件中即可
+     */
+    
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    implementionFilePath = filePath;
+    if ([fileManager fileExistsAtPath:implementionFilePath]) {
+      NSURL *urlImpleFilePath = [NSURL fileURLWithPath:implementionFilePath];
+      NSString *fileContent = [NSString stringWithContentsOfURL:urlImpleFilePath encoding:NSUTF8StringEncoding error:NULL];
+      NSString *contents = [self insertModels:properties className:className origText:fileContent];
+      [contents writeToURL:urlImpleFilePath atomically:NO encoding:NSUTF8StringEncoding error:NULL];
+    }
+    
   } else {
+    /**
+     *  @brief  当前在头文件中，直接把getter方法写到m文件中
+     */
+    
     NSFileManager *fileManager = [NSFileManager defaultManager];
     implementionFilePath = [filePath stringByReplacingOccurrencesOfString:@"h" withString:@"m" options:NSBackwardsSearch range:NSMakeRange([filePath length] - 2, 2)];
     if ([fileManager fileExistsAtPath:implementionFilePath]) {
@@ -86,24 +102,21 @@ static NLAutoGetter *sharedPlugin;
   
   text = [NSMutableString stringWithString:origText];
   __block NSUInteger locationAutoGetter = NSMaxRange(rangeClassDefine);
+  
   [models enumerateObjectsUsingBlock:^(NOCPropertyModel *propertyModel, NSUInteger idx, BOOL *stop) {
     if ([self isExistModel:propertyModel inText:text]) {
       return ;
     }
     
-    [text insertString:@"\n" atIndex:locationAutoGetter++];
+    [text insertString:@"\n" atIndex:locationAutoGetter];
+    if (idx != 0) {
+      locationAutoGetter++;
+    }
     
     NSString *getterMethod = [propertyModel completeMethod];
     [text insertString:getterMethod atIndex:locationAutoGetter];
     locationAutoGetter += [getterMethod length];
   }];
-  
-  /**
-   *  @brief  如果有写入getter方法，则在最后写入一个换行符
-   */
-  if (locationAutoGetter != NSMaxRange(rangeClassDefine)) {
-    [text insertString:@"\n" atIndex:locationAutoGetter];
-  }
   
   return text;
 }
